@@ -6,10 +6,10 @@ use clap::Parser;
 #[command(author, version, about, long_about = None)]
 pub struct CmdArgs {
     /// File that needs to be copy
-    #[arg(short, long,default_value_t = String::from("/Users/kasunranasinghe/Development/RUST/test/123.mkv"))]
+    #[arg(short, long)]
     pub source: String,
 
     /// Destination folder
-    #[arg(short, long, default_value_t = String::from("/Users/kasunranasinghe/Development/RUST/test_2"))]
+    #[arg(short, long)]
     pub destination: String,
 }

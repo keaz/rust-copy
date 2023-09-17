@@ -7,6 +7,8 @@ edition = "2021"
 
 [dependencies]
 clap = { version = "4.4.2", features = ["derive"] }
+console = { version = "0.15.7", features = ["ansi-parsing"] }
+futures = "0.3.28"
 indicatif = { version = "0.17.6", features = ["improved_unicode"] }
 log = "0.4.20"
 tokio = { version = "1.32.0", features = ["full"] }
