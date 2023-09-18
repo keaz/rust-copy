@@ -16,6 +16,7 @@ use copy_file::{
 use indicatif::{ProgressBar, ProgressState, ProgressStyle, MultiProgress};
 
 static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
+static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
 
 fn main() {
     let cmds = CmdArgs::parse_from(env::args_os());
@@ -27,10 +28,10 @@ fn main() {
     let file_data_arch = Arc::new(Mutex::new(source_files));
 
 
-    let spinner_style = ProgressStyle::with_template("{prefix:.bold.dim} {spinner} {wide_msg}")
+    let spinner_style = ProgressStyle::with_template("{.bold.dim} {spinner} {wide_msg}")
         .unwrap()
         .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
-    
+    let progress_bar = Arc::new(ProgressBar::new_spinner()) ;
     if file_reader.is_folder() {
         println!("{} {}Searching files...",style("[1/2]").bold().dim(),LOOKING_GLASS);
         let path = PathBuf::from(cmds.source.clone());
@@ -42,14 +43,15 @@ fn main() {
             }
             Ok(entries) => {
                 let file_data_arch = Arc::clone(&file_data_arch);
-                let progress_bar = ProgressBar::new(10);
+                
                 progress_bar.set_style(spinner_style.clone());
-                walk_dir(entries, file_data_arch,Arc::new(progress_bar));
+                walk_dir(entries, file_data_arch,progress_bar.clone());
             }
         }
     } else {
         file_data_arch.lock().unwrap().push(SourceFile { file_path: PathBuf::new().join(&cmds.source.clone()) });
     }
+    progress_bar.finish_and_clear();
 
     let buf_size = 10240;
     
@@ -63,12 +65,15 @@ fn main() {
     .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
     .progress_chars("#>-");
     let mut handlers = vec![];
-    for i in 0..3 {
+    println!("{} {}Copying files...",style("[2/2]").bold().dim(),TRUCK);
+    let total_file = Arc::new(Mutex::new(0));
+    for _ in 0..3 {
         let destination  = cmds.destination.clone();
         let file_data_arch =  file_data_arch.clone();
         let m  =  m.clone();
         let sty =  sty.clone();
         let source = cmds.source.clone();
+        let total_file = total_file.clone();
         let handler = thread::spawn(move ||{
         
             loop {
@@ -105,7 +110,9 @@ fn main() {
                         buf = vec![0; buf_size];
                         
                     }
-                    pb.finish();
+                    let mut total_file = total_file.lock().unwrap();
+                    *total_file = *total_file + 1;
+                    pb.finish_and_clear();
                 }
             }
         });
@@ -116,5 +123,7 @@ fn main() {
     for handler in handlers {
         handler.join().unwrap();
     }
+
+    println!("{} {}files copied",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK);
 
 }

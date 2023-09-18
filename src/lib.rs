@@ -26,7 +26,6 @@ pub fn walk_dir(mut entries: fs::ReadDir, file_data: Arc<Mutex<Vec<SourceFile>>>
             extract_detail_and_walk(metadata, path, file_data.clone(),progress_bar.clone());
         }
     }
-    progress_bar.finish();
 }
 
 fn folder_metadata(path: &PathBuf) -> Option<Metadata> {
@@ -54,7 +53,6 @@ fn extract_detail_and_walk(
         }
     
         if metadata.is_dir() {
-            progress_bar.set_prefix(format!("{:?}",path));
             progress_bar.set_message(format!("Looking files in: {:?}",path));
             match fs::read_dir(&path) {
                 Err(er) => {
