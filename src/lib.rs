@@ -1,6 +1,6 @@
-use std::{sync::{Arc, Mutex}, path::PathBuf, fs::{Metadata, self, ReadDir}, ops::ControlFlow};
+use std::{sync::{Arc, Mutex}, path::PathBuf, fs::{Metadata, self, ReadDir}};
 
-use futures::{FutureExt, future::BoxFuture};
+
 use indicatif::ProgressBar;
 
 pub mod io;
@@ -15,6 +15,7 @@ pub struct Data {
 #[derive(Clone)]
 pub struct SourceFile {
     pub file_path: PathBuf,
+    pub size: u64,
 }
 
 
@@ -28,7 +29,7 @@ pub fn walk_dir(mut entries: fs::ReadDir, file_data: Arc<Mutex<Vec<SourceFile>>>
     }
 }
 
-fn folder_metadata(path: &PathBuf) -> Option<Metadata> {
+pub fn folder_metadata(path: &PathBuf) -> Option<Metadata> {
     match fs::metadata(path) {
         Err(err) => {
             eprintln!("Error reading metadata {:?} error {:?}", path, err);
@@ -48,7 +49,7 @@ fn extract_detail_and_walk(
    
         if metadata.is_file() {
             let mut data = (*file_data).lock().unwrap();
-            data.push(SourceFile { file_path: path });
+            data.push(SourceFile { file_path: path, size: metadata.len() });
             return;
         }
     

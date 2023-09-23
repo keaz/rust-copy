@@ -1,17 +1,16 @@
 use std::{
     env,
     fmt::Write,
-    path::{Path, PathBuf},
+    path::{PathBuf},
     sync::{Arc, Mutex},
-    thread, fs,
+    thread, fs, time::Duration,
 };
 
 use clap::Parser;
 use console::{Emoji, style};
 use copy_file::{
     cmd::CmdArgs,
-    io::{FileReader, FileWriter},
-    Data, walk_dir, SourceFile,
+    io::{FileReader, FileWriter}, walk_dir, SourceFile, folder_metadata,
 };
 use indicatif::{ProgressBar, ProgressState, ProgressStyle, MultiProgress};
 
@@ -26,7 +25,6 @@ fn main() {
 
     let source_files: Vec<SourceFile> = vec![];
     let file_data_arch = Arc::new(Mutex::new(source_files));
-
 
     let spinner_style = ProgressStyle::with_template("{.bold.dim} {spinner} {wide_msg}")
         .unwrap()
@@ -49,7 +47,9 @@ fn main() {
             }
         }
     } else {
-        file_data_arch.lock().unwrap().push(SourceFile { file_path: PathBuf::new().join(&cmds.source.clone()) });
+        let path_buff = PathBuf::new().join(&cmds.source.clone());
+        let metadata = folder_metadata(&path_buff).unwrap();
+        file_data_arch.lock().unwrap().push(SourceFile { file_path: path_buff,size: metadata.len() });
     }
     progress_bar.finish_and_clear();
 
@@ -57,24 +57,35 @@ fn main() {
     
     let mut offset = 0;
 
-    let m = Arc::new(MultiProgress::new());
+    let multi_progress = Arc::new(MultiProgress::new());
     let sty = ProgressStyle::with_template(
-        "{prefix:.green} [{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({elapsed_precise})",
+        "[{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({elapsed_precise})",
     )
     .unwrap()
     .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
     .progress_chars("#>-");
+
     let mut handlers = vec![];
     println!("{} {}Copying files...",style("[2/2]").bold().dim(),TRUCK);
     let total_file = Arc::new(Mutex::new(0));
-    for _ in 0..3 {
+    let total_size_tmp = Arc::new(Mutex::new(0));
+
+    let total_size: u64 = file_data_arch.lock().unwrap().iter().map(|file_data| file_data.size).sum();
+    let total_size_pb = multi_progress.add(ProgressBar::new(total_size));
+    total_size_pb.set_style(sty);
+    let total_size_pb = Arc::new(total_size_pb);
+
+    for _ in 0..1 {
         let destination  = cmds.destination.clone();
         let file_data_arch =  file_data_arch.clone();
-        let m  =  m.clone();
-        let sty =  sty.clone();
         let source = cmds.source.clone();
         let total_file = total_file.clone();
-        let handler = thread::spawn(move ||{
+        let total_size_tmp = total_size_tmp.clone();
+        let multi_progress = multi_progress.clone();
+        let total_size_pb = total_size_pb.clone();
+        let current_file = Arc::new(multi_progress.add(ProgressBar::new_spinner()));
+        
+        let handler = thread::spawn(move || {
         
             loop {
                 let mut file_data = file_data_arch.lock().unwrap();
@@ -83,7 +94,8 @@ fn main() {
                 }
                 let destination = destination.clone();
                 if let Some(file) = file_data.pop() {
-                    drop(file_data);
+                    // drop(file_data);
+
                     let file_path  = file.file_path.clone();
                     let source = PathBuf::from(source.clone());
                     let relative_path = file_path.strip_prefix(source).unwrap();
@@ -92,38 +104,44 @@ fn main() {
                     
                     let mut reader = FileReader::from(file.file_path);
                     let name = reader.name();
+                    current_file.set_message(format!("Copying file: {:?}",name));
                     let parent_folder = relative_path.strip_suffix(&name).unwrap();
                     let destination = PathBuf::from(destination).join(parent_folder);
                     let mut file_writer = FileWriter::new(destination, name.clone(), size).unwrap();
-    
-                    let pb = m.add(ProgressBar::new(reader.size()));
-                    pb.set_style(sty.clone());
-                    pb.set_prefix(name);
-    
+                    
                     let mut buf = vec![0; buf_size];
                     while reader.read_random(offset, &mut buf).unwrap() {
                         file_writer.write_random(offset, &buf).unwrap();
-                        // pb.set_message(format!("{name}"));
-                        pb.inc(buf.len() as u64);
-    
+                        total_size_pb.inc(buf.len() as u64);
+                        let mut total_size = total_size_tmp.lock().unwrap();
+                        *total_size = *total_size + buf.len();
                         offset = offset + buf_size as u64;
                         buf = vec![0; buf_size];
-                        
                     }
+                    
                     let mut total_file = total_file.lock().unwrap();
                     *total_file = *total_file + 1;
-                    pb.finish_and_clear();
+                
                 }
             }
         });
-
+        // handler.join().unwrap();
         handlers.push(handler);
+        
     }
+
+    
 
     for handler in handlers {
         handler.join().unwrap();
     }
+    
+    // let total_size_tmp = total_size_tmp.lock().unwrap();
+    // while total_size != (*total_size_tmp) as u64 {
+    //     thread::sleep(Duration::from_secs(1));
+    // }
 
-    println!("{} {}files copied",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK);
+    // total_size_pb.finish();
+    // println!("{} {}files copied, total bytes {} ",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK, total_size_tmp);
 
 }

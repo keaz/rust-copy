@@ -6,7 +6,7 @@ use clap::Parser;
 #[command(author, version, about, long_about = None)]
 pub struct CmdArgs {
     /// File that needs to be copy
-    #[arg(short, long,default_value_t = String::from("/Users/kasunranasinghe/Development/Java"))]
+    #[arg(short, long,default_value_t = String::from("/Users/kasunranasinghe/Development/IELTS"))]
     pub source: String,
 
     /// Destination folder

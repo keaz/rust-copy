@@ -1,6 +1,6 @@
 // use std::{path::{Path, PathBuf}, fs::{File, self, remove_file}, io::{SeekFrom, Seek, Write, Read}};
 
-use std::{path::{PathBuf, Path}, io::{SeekFrom, Error, Seek, Read, Write}, fs::{File, remove_file, self}};
+use std::{path::{PathBuf, Path}, io::{SeekFrom, Seek, Read, Write}, fs::{File, remove_file, self}};
 
 use log::{warn, debug};
 
@@ -44,7 +44,7 @@ impl FileReader {
             .unwrap();
         let file = File::open(path_buf);
         if let Err(er) =  file {
-            eprintln!("Error opeining file {}",er);
+            eprintln!("Error opening file {}",er);
             panic!()
         }
         FileReader { file: file.unwrap(), file_name: String::from(file_name) }
@@ -116,7 +116,7 @@ pub struct FileWriter {
 
 impl FileWriter {
 
-    pub fn new(destination: PathBuf, file_name: String, size: u64) -> Result<Self,FileError> {
+    pub fn new(destination: PathBuf, file_name: String, _size: u64) -> Result<Self,FileError> {
         if !destination.exists() {
             fs::create_dir_all(&destination).unwrap();
         }
