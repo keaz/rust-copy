@@ -101,12 +101,12 @@ impl FileReader {
         &mut self,
         offset: u64,
         buf: &mut [u8],
-    )  -> Result<bool,FileError> {
+    )  -> Result<usize,FileError> {
         
         self.file.seek(SeekFrom::Start(offset)).unwrap();
         let read_data = self.file.read(buf).unwrap();
 
-        Ok(read_data > 0)
+        Ok(read_data)
     }
 }
 

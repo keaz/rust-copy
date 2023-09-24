@@ -3,7 +3,7 @@ use std::{
     fmt::Write,
     path::{PathBuf},
     sync::{Arc, Mutex},
-    thread, fs, time::Duration,
+    thread, fs, time::Duration, ops::Range,
 };
 
 use clap::Parser;
@@ -16,6 +16,8 @@ use indicatif::{ProgressBar, ProgressState, ProgressStyle, MultiProgress};
 
 static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
 static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
+static BUF_SIZE: usize = 10240;
+static THREAD_COUNT: Range<i32> = 0..3;
 
 fn main() {
     let cmds = CmdArgs::parse_from(env::args_os());
@@ -53,10 +55,6 @@ fn main() {
     }
     progress_bar.finish_and_clear();
 
-    let buf_size = 10240;
-    
-    let mut offset = 0;
-
     let multi_progress = Arc::new(MultiProgress::new());
     let sty = ProgressStyle::with_template(
         "[{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({elapsed_precise})",
@@ -75,7 +73,7 @@ fn main() {
     total_size_pb.set_style(sty);
     let total_size_pb = Arc::new(total_size_pb);
 
-    for _ in 0..1 {
+    for _ in THREAD_COUNT.clone() {
         let destination  = cmds.destination.clone();
         let file_data_arch =  file_data_arch.clone();
         let source = cmds.source.clone();
@@ -94,7 +92,7 @@ fn main() {
                 }
                 let destination = destination.clone();
                 if let Some(file) = file_data.pop() {
-                    // drop(file_data);
+                    drop(file_data); // Drop the lock, so other threads can read the file_data
 
                     let file_path  = file.file_path.clone();
                     let source = PathBuf::from(source.clone());
@@ -109,14 +107,19 @@ fn main() {
                     let destination = PathBuf::from(destination).join(parent_folder);
                     let mut file_writer = FileWriter::new(destination, name.clone(), size).unwrap();
                     
-                    let mut buf = vec![0; buf_size];
-                    while reader.read_random(offset, &mut buf).unwrap() {
+                    let mut offset = 0;
+                    let mut buf = vec![0; BUF_SIZE];
+                    loop  {
+                        let dat_red = reader.read_random(offset, &mut buf).unwrap();
+                        if dat_red == 0 {
+                            break;
+                        }
                         file_writer.write_random(offset, &buf).unwrap();
-                        total_size_pb.inc(buf.len() as u64);
+                        total_size_pb.inc(dat_red as u64);
                         let mut total_size = total_size_tmp.lock().unwrap();
-                        *total_size = *total_size + buf.len();
-                        offset = offset + buf_size as u64;
-                        buf = vec![0; buf_size];
+                        *total_size = *total_size + dat_red;
+                        offset = offset + BUF_SIZE as u64;
+                        buf = vec![0; BUF_SIZE];
                     }
                     
                     let mut total_file = total_file.lock().unwrap();
@@ -125,23 +128,16 @@ fn main() {
                 }
             }
         });
-        // handler.join().unwrap();
         handlers.push(handler);
         
     }
 
-    
-
     for handler in handlers {
         handler.join().unwrap();
     }
-    
-    // let total_size_tmp = total_size_tmp.lock().unwrap();
-    // while total_size != (*total_size_tmp) as u64 {
-    //     thread::sleep(Duration::from_secs(1));
-    // }
 
-    // total_size_pb.finish();
-    // println!("{} {}files copied, total bytes {} ",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK, total_size_tmp);
+    total_size_pb.finish();
+    let total_kb = (*total_size_tmp.lock().unwrap())/(1024 * 1024) ;
+    println!("{} {} files copied, total KBs copied {} ",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK,total_kb );
 
 }
