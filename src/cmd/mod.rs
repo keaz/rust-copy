@@ -3,7 +3,7 @@ use clap::Parser;
 use crate::{DEFAULT_BUF_SIZE, DEFAULT_THREAD_COUNT};
 
 
-/// CLI application copy file with resume capability
+/// A CLI tool that replaces the cp
 #[derive(Parser, Debug)]
 #[command(author, version, about, long_about = None)]
 pub struct CmdArgs {
@@ -15,11 +15,11 @@ pub struct CmdArgs {
     #[arg(short, long)]
     pub destination: String,
 
-    /// number of threads to use
+    /// Number of threads to use
     #[arg(short,long,default_value_t=DEFAULT_THREAD_COUNT)]
     pub threads: i8,
 
-    // Buffer size,
+    /// Size of the buffer
     #[arg(short,long, default_value_t=DEFAULT_BUF_SIZE)]
     pub buffer_size: u32
 }
