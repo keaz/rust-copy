@@ -2,13 +2,18 @@
 name = "rfcp"
 version = "0.1.0"
 edition = "2021"
+authors = ["Kasun Ranasingge <kasunranasinghe303@gmail.com>"]
+description = "Replacement for cp"
+license = "MIT/Apache-2.0"
+readme = "README.md"
+repository = "https://github.com/keaz/high-level-kafka"
+keywords = ["cp", "linux", "windoes"]
+
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
 clap = { version = "4.4.2", features = ["derive"] }
 console = { version = "0.15.7", features = ["ansi-parsing"] }
-futures = "0.3.28"
 indicatif = { version = "0.17.6", features = ["improved_unicode"] }
 log = "0.4.20"
-tokio = { version = "1.32.0", features = ["full"] }

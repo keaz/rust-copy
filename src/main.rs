@@ -6,7 +6,7 @@ use std::{
 
 use clap::Parser;
 use console::{Emoji, style};
-use copy_file::{
+use rfcp::{
     cmd::CmdArgs,
     io::FileReader, SourceFile, get_reative_path, create_file_writer, create_progress_bars, copy_data, read_file_metadata, create_total_progressbar,
 };
