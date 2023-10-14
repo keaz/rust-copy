@@ -1,23 +1,20 @@
 use std::{
     env,
-    fmt::Write,
-    path::{PathBuf},
     sync::{Arc, Mutex},
-    thread, fs, time::Duration, ops::Range,
+    thread, ops::ControlFlow,
 };
 
 use clap::Parser;
 use console::{Emoji, style};
 use copy_file::{
     cmd::CmdArgs,
-    io::{FileReader, FileWriter}, walk_dir, SourceFile, folder_metadata,
+    io::FileReader, SourceFile, get_reative_path, create_file_writer, create_progress_bars, copy_data, read_file_metadata, create_total_progressbar,
 };
-use indicatif::{ProgressBar, ProgressState, ProgressStyle, MultiProgress};
+use indicatif::{ProgressBar, ProgressStyle, MultiProgress};
 
-static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
+
 static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
-static BUF_SIZE: usize = 10240;
-static THREAD_COUNT: Range<i32> = 0..3;
+
 
 fn main() {
     let cmds = CmdArgs::parse_from(env::args_os());
@@ -32,36 +29,13 @@ fn main() {
         .unwrap()
         .tick_chars("⠁⠂⠄⡀⢀⠠⠐⠈ ");
     let progress_bar = Arc::new(ProgressBar::new_spinner()) ;
-    if file_reader.is_folder() {
-        println!("{} {}Searching files...",style("[1/2]").bold().dim(),LOOKING_GLASS);
-        let path = PathBuf::from(cmds.source.clone());
-        let reads = fs::read_dir(path);
-        match reads {
-            Err(er) => {
-                eprintln!("Error reading folder  path {}",er);
-                return;
-            }
-            Ok(entries) => {
-                let file_data_arch = Arc::clone(&file_data_arch);
-                
-                progress_bar.set_style(spinner_style.clone());
-                walk_dir(entries, file_data_arch,progress_bar.clone());
-            }
-        }
-    } else {
-        let path_buff = PathBuf::new().join(&cmds.source.clone());
-        let metadata = folder_metadata(&path_buff).unwrap();
-        file_data_arch.lock().unwrap().push(SourceFile { file_path: path_buff,size: metadata.len() });
+    if let ControlFlow::Break(_) = read_file_metadata(file_reader, cmds.source.clone(), &file_data_arch, &progress_bar, spinner_style) {
+        return;
     }
     progress_bar.finish_and_clear();
 
     let multi_progress = Arc::new(MultiProgress::new());
-    let sty = ProgressStyle::with_template(
-        "[{wide_bar:.cyan/blue}] {bytes}/{total_bytes} ({elapsed_precise})",
-    )
-    .unwrap()
-    .with_key("eta", |state: &ProgressState, w: &mut dyn Write| write!(w, "{:.1}s", state.eta().as_secs_f64()).unwrap())
-    .progress_chars("#>-");
+
 
     let mut handlers = vec![];
     println!("{} {}Copying files...",style("[2/2]").bold().dim(),TRUCK);
@@ -69,19 +43,18 @@ fn main() {
     let total_size_tmp = Arc::new(Mutex::new(0));
 
     let total_size: u64 = file_data_arch.lock().unwrap().iter().map(|file_data| file_data.size).sum();
-    let total_size_pb = multi_progress.add(ProgressBar::new(total_size));
-    total_size_pb.set_style(sty);
+    let total_size_pb = create_total_progressbar(&multi_progress, total_size);
     let total_size_pb = Arc::new(total_size_pb);
 
-    for _ in THREAD_COUNT.clone() {
+    let buffer_size = cmds.buffer_size;
+
+    for _ in 0..cmds.threads {
         let destination  = cmds.destination.clone();
         let file_data_arch =  file_data_arch.clone();
         let source = cmds.source.clone();
         let total_file = total_file.clone();
         let total_size_tmp = total_size_tmp.clone();
-        let multi_progress = multi_progress.clone();
-        let total_size_pb = total_size_pb.clone();
-        let current_file = Arc::new(multi_progress.add(ProgressBar::new_spinner()));
+        let (total_size_pb, current_file) = create_progress_bars(&multi_progress, &total_size_pb);
         
         let handler = thread::spawn(move || {
         
@@ -94,32 +67,18 @@ fn main() {
                 if let Some(file) = file_data.pop() {
                     drop(file_data); // Drop the lock, so other threads can read the file_data
 
-                    let file_path  = file.file_path.clone();
-                    let source = PathBuf::from(source.clone());
-                    let relative_path = file_path.strip_prefix(source).unwrap();
-                    let relative_path = format!("{:?}",relative_path);
-                    let relative_path  = relative_path.replace("\"", "");
-                    
+                    let relative_path = get_reative_path(&file, &source);
                     let mut reader = FileReader::from(file.file_path);
                     let name = reader.name();
                     current_file.set_message(format!("Copying file: {:?}",name));
-                    let parent_folder = relative_path.strip_suffix(&name).unwrap();
-                    let destination = PathBuf::from(destination).join(parent_folder);
-                    let mut file_writer = FileWriter::new(destination, name.clone(), size).unwrap();
+                    let mut file_writer = create_file_writer(relative_path, name, destination, size);
                     
                     let mut offset = 0;
-                    let mut buf = vec![0; BUF_SIZE];
+                    let mut buf = vec![0; buffer_size as usize];
                     loop  {
-                        let dat_red = reader.read_random(offset, &mut buf).unwrap();
-                        if dat_red == 0 {
+                        if let ControlFlow::Break(_) = copy_data(&mut reader, &mut offset, &mut buf, &mut file_writer, &total_size_pb, &total_size_tmp,buffer_size) {
                             break;
                         }
-                        file_writer.write_random(offset, &buf).unwrap();
-                        total_size_pb.inc(dat_red as u64);
-                        let mut total_size = total_size_tmp.lock().unwrap();
-                        *total_size = *total_size + dat_red;
-                        offset = offset + BUF_SIZE as u64;
-                        buf = vec![0; BUF_SIZE];
                     }
                     
                     let mut total_file = total_file.lock().unwrap();
@@ -141,3 +100,7 @@ fn main() {
     println!("{} {} files copied, total KBs copied {} ",style(format!("{}",total_file.lock().unwrap())).bold().dim(),TRUCK,total_kb );
 
 }
+
+
+
+

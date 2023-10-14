@@ -1,10 +1,6 @@
-// use std::{path::{Path, PathBuf}, fs::{File, self, remove_file}, io::{SeekFrom, Seek, Write, Read}};
-
 use std::{path::{PathBuf, Path}, io::{SeekFrom, Seek, Read, Write}, fs::{File, remove_file, self}};
 
 use log::{warn, debug};
-
-const BUFFER_SIZE: u64 = 1024 * 1024 * 50;
 
 #[derive(Debug)]
 pub enum FileError {
@@ -139,31 +135,6 @@ impl FileWriter {
         debug!("New file created {:?}",file);
         // let file = Self::write_random_data(file,size)?;
         Ok(FileWriter {file})
-    }
-    
-
-     fn write_random_data(file: File, size: u64) -> Result<File, FileError> {
-        let mut file = file;
-        if size > BUFFER_SIZE  {
-            let mut offset = 0;
-            let buffers = size / BUFFER_SIZE ;
-            let last_buffer = size % BUFFER_SIZE;
-            let buffer = vec![0;BUFFER_SIZE as usize];
-            let mut buffer_index = 0;
-            
-            while  buffer_index < buffers {
-                file = Self::write_random_to_given_file(file, offset +1 , &buffer)?;
-                offset += BUFFER_SIZE as u64 ;
-                buffer_index = buffer_index + 1;
-            }
-
-            if last_buffer != 0 {
-                let buffer = vec![0;last_buffer as usize];
-                file =  Self::write_random_to_given_file(file,offset +1 , &buffer)?;
-            }
-        }
-
-        Ok(file)
     }
 
     ///
