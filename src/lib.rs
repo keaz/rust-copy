@@ -90,8 +90,10 @@ pub fn get_reative_path(file: &SourceFile, source: &String) -> String {
 }
 
 pub fn create_file_writer(relative_path: String, name: String, destination: String, size: u64) -> FileWriter {
-    let parent_folder = relative_path.strip_suffix(&name).unwrap();
-    let destination = PathBuf::from(destination).join(parent_folder);
+    let destination =  match relative_path.strip_suffix(&name) {
+        Some(parent_folder) => PathBuf::from(destination).join(parent_folder),
+        None => PathBuf::from(destination),
+    };
     let file_writer = FileWriter::new(destination, name.clone(), size).unwrap();
     file_writer
 }
