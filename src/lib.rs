@@ -1,4 +1,4 @@
-use std::{sync::{Arc, Mutex}, path::PathBuf, fs::{Metadata, self, ReadDir}, ops::ControlFlow, fmt::Write};
+use std::{sync::{Arc, Mutex}, path::PathBuf, fs::{Metadata, self, ReadDir}, ops::ControlFlow, fmt::Write, time::SystemTime};
 
 
 use console::{style, Emoji};
@@ -22,6 +22,7 @@ pub struct Data {
 pub struct SourceFile {
     pub file_path: PathBuf,
     pub size: u64,
+    pub modified: Option<SystemTime>
 }
 
 
@@ -53,10 +54,13 @@ fn extract_detail_and_walk(
     file_data: Arc<Mutex<Vec<SourceFile>>>,progress_bar: Arc<ProgressBar>
 )   {
     let progress_bar = progress_bar.clone();
-   
         if metadata.is_file() {
             let mut data = (*file_data).lock().unwrap();
-            data.push(SourceFile { file_path: path, size: metadata.len() });
+            let modified = match metadata.modified() {
+                Ok(modified) => Some(modified),
+                Err(_) => None,
+            };
+            data.push(SourceFile { file_path: path, size: metadata.len(), modified });
             return;
         }
     
@@ -89,12 +93,12 @@ pub fn get_reative_path(file: &SourceFile, source: &String) -> String {
     relative_path
 }
 
-pub fn create_file_writer(relative_path: String, name: String, destination: String, size: u64) -> FileWriter {
+pub fn create_file_writer(relative_path: String, name: String, destination: String, size: u64, modified: Option<SystemTime>) -> FileWriter {
     let destination =  match relative_path.strip_suffix(&name) {
         Some(parent_folder) => PathBuf::from(destination).join(parent_folder),
         None => PathBuf::from(destination),
     };
-    let file_writer = FileWriter::new(destination, name.clone(), size).unwrap();
+    let file_writer = FileWriter::new(destination, name.clone(), size,modified).unwrap();
     file_writer
 }
 
@@ -139,7 +143,11 @@ pub fn read_file_metadata(file_reader: FileReader, source: String, file_data_arc
     } else {
         let path_buff = PathBuf::new().join(source);
         let metadata = folder_metadata(&path_buff).unwrap();
-        file_data_arch.lock().unwrap().push(SourceFile { file_path: path_buff,size: metadata.len() });
+        let modified = match metadata.modified() {
+            Ok(modified) => Some(modified),
+            Err(_) => None,
+        };
+        file_data_arch.lock().unwrap().push(SourceFile { file_path: path_buff,size: metadata.len(), modified });
     }
     ControlFlow::Continue(())
 }

@@ -1,6 +1,6 @@
 [package]
 name = "rfcp"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2021"
 authors = ["Kasun Ranasingge <kasunranasinghe303@gmail.com>"]
 description = "Replacement for cp"
@@ -15,5 +15,6 @@ keywords = ["cp", "linux", "windows","copy","file"]
 [dependencies]
 clap = { version = "4.4.2", features = ["derive"] }
 console = { version = "0.15.7", features = ["ansi-parsing"] }
+filetime = "0.2.22"
 indicatif = { version = "0.17.6", features = ["improved_unicode"] }
 log = "0.4.20"

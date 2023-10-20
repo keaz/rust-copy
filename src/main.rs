@@ -71,8 +71,13 @@ fn main() {
                     let mut reader = FileReader::from(file.file_path);
                     let name = reader.name();
                     current_file.set_message(format!("Copying file: {:?}",name));
-                    let mut file_writer = create_file_writer(relative_path, name, destination, size);
-                    
+                    let mut file_writer = create_file_writer(relative_path, name, destination, size, file.modified);
+                    if file_writer.is_copied() {
+                        total_size_pb.inc(reader.size());
+                        let mut total_file = total_file.lock().unwrap();
+                        *total_file = *total_file + 1;
+                        continue;
+                    }
                     let mut offset = 0;
                     let mut buf = vec![0; buffer_size as usize];
                     loop  {
@@ -80,7 +85,7 @@ fn main() {
                             break;
                         }
                     }
-                    
+                    file_writer.set_modified();
                     let mut total_file = total_file.lock().unwrap();
                     *total_file = *total_file + 1;
                 

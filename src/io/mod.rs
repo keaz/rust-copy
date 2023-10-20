@@ -1,6 +1,9 @@
-use std::{path::{PathBuf, Path}, io::{SeekFrom, Seek, Read, Write}, fs::{File, remove_file, self}};
+use std::{path::{PathBuf, Path}, io::{SeekFrom, Seek, Read, Write}, fs::{File, remove_file, self, Metadata}, time::SystemTime};
 
+use filetime::{set_file_mtime, FileTime};
 use log::{warn, debug};
+
+use crate::folder_metadata;
 
 #[derive(Debug)]
 pub enum FileError {
@@ -107,21 +110,46 @@ impl FileReader {
 }
 
 pub struct FileWriter {
-    file: File,
+    file: Option<File>,
+    is_copied: bool,
+    path: PathBuf,
+    source_modified: Option<SystemTime>
 }
 
 impl FileWriter {
 
-    pub fn new(destination: PathBuf, file_name: String, _size: u64) -> Result<Self,FileError> {
+    pub fn new(destination: PathBuf, file_name: String, _size: u64, source_modified: Option<SystemTime>) -> Result<Self,FileError> {
         if !destination.exists() {
             fs::create_dir_all(&destination).unwrap();
         }
         let path = Path::new(&destination).join(&file_name);
         let path_exists = path.exists();
 
+        let mut is_copied = false;
         if path_exists {
-            warn!("File exists deleting the file {}",path_exists);
+            if let Some(source_modified) = source_modified {
+                if let Some(metadata) = folder_metadata(&path) {
+                    if let Ok(modified) = metadata.modified() {
+                        is_copied = modified.eq(&source_modified);
+                    }
+                }
+            }
+            
+            if is_copied {
+                return Ok(FileWriter {file: None,is_copied, path, source_modified})
+            }
+            
+            warn!("File exists and modified, deleting the file {}",path_exists);
             let _ = remove_file(&path);
+            let file = match File::create(path.clone()) {
+                Ok(new_file) => new_file,
+                Err(err) => {
+                    let error_message = err.to_string();
+                    return Err(FileError::CannotCreate(error_message));
+                },
+            };
+            debug!("New file created {:?}",file);
+            return Ok(FileWriter {file: Some(file),is_copied, path, source_modified});
         }
 
         let file = match File::create(path.clone()) {
@@ -131,10 +159,18 @@ impl FileWriter {
                 return Err(FileError::CannotCreate(error_message));
             },
         };
-
         debug!("New file created {:?}",file);
-        // let file = Self::write_random_data(file,size)?;
-        Ok(FileWriter {file})
+        return Ok(FileWriter {file: Some(file),is_copied, path, source_modified});
+    }
+
+    pub fn is_copied(&self)-> bool {
+        self.is_copied
+    }
+
+    pub fn set_modified(&self) {
+        if let Some(source_time) = self.source_modified {
+            set_file_mtime(self.path.clone(), FileTime::from_system_time(source_time)).unwrap();
+        }
     }
 
     ///
@@ -166,8 +202,9 @@ impl FileWriter {
     ///        * `buf` - The buffer where the data will be written
     ///
     pub  fn write_random(&mut self, offset: u64, buf: &[u8]) -> Result<(),FileError>{
-        self.file.seek(SeekFrom::Start(offset)).unwrap();
-        self.file.write(buf).unwrap();
+        let file = self.file.as_mut().unwrap();
+        file.seek(SeekFrom::Start(offset)).unwrap();
+        file.write(buf).unwrap();
         Ok(())
     }
 
