@@ -4,7 +4,7 @@ This is a cli tool that try to replace unix cp command. This provides better per
 
 
 ## Usage
-### Install
+### Install Using cargo
 ```
 cargo install --path .
 ```
@@ -13,6 +13,10 @@ cargo install --path .
 rfcp -s=/source/folder -d=/destination/folder
 ```
 
+### Install Using Homebrew
+```
+brew install keaz/homebrew/rfcp
+```
 
 ## Examples
 
