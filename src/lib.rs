@@ -256,3 +256,23 @@ pub fn create_total_progressbar(
     total_size_pb.set_style(sty);
     total_size_pb
 }
+
+#[cfg(target_family = "unix")] 
+pub fn rewrite_destination(source: String,destination: String) -> String {
+    if source.ends_with("/") {
+        return destination;
+    }
+
+    let splits = source.split("/").last().unwrap();
+    return destination + "/" + splits;
+}
+
+#[cfg(target_family = "windows")] 
+pub fn rewrite_destination(source: String,destination: String) -> String {
+    if source.ends_with("\\") {
+        return destination;
+    }
+
+    let splits = source.split("\\").last().unwrap();
+    return destination + "\\" + splits;
+}

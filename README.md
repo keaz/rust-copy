@@ -16,7 +16,18 @@ rfcp -s=/source/folder -d=/destination/folder
 
 ## Examples
 
-### With all the options.
+### Copy root folder with content the options.
 ```sh
-rfcp -s=/source/folder -d=/destination/folder -t=10 -b=10240
+rfcp -s=/source/folder -d=/destination/folder
 ```
+
+### Copy content without creating the root folder.
+```sh
+rfcp -s=/source/folder/ -d=/destination/folder
+```
+
+## Options
+-s : Souce folder
+-d : Destintion folder
+-t : Number of threads (default 3)
+-b : Buffer size (default 10240)

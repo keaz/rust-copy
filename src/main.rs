@@ -10,7 +10,7 @@ use console::{style, Emoji};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rfcp::{
     cmd::CmdArgs, copy_data, create_file_writer, create_progress_bars, create_total_progressbar,
-    get_reative_path, io::FileReader, read_file_metadata, SourceFile,
+    get_reative_path, io::FileReader, read_file_metadata, SourceFile, rewrite_destination,
 };
 
 static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
@@ -56,9 +56,9 @@ fn main() {
     let total_size_pb = Arc::new(total_size_pb);
 
     let buffer_size = cmds.buffer_size;
-
+    let destination = rewrite_destination(cmds.source.clone(),cmds.destination);
     for _ in 0..cmds.threads {
-        let destination = cmds.destination.clone();
+        let destination = destination.clone();
         let file_data_arch = file_data_arch.clone();
         let source = cmds.source.clone();
         let total_file = total_file.clone();
