@@ -106,7 +106,7 @@ pub fn create_file_writer(
     relative_path: String,
     name: String,
     destination: String,
-    _size: u64,
+    size: u64,
     source_modified: Option<SystemTime>,
 ) -> Option<FileWriter> {
     let destination = match relative_path.strip_suffix(&name) {
@@ -132,10 +132,9 @@ pub fn create_file_writer(
             return create_new_file_and_return_writer(&path, Some(source_modified));
         }
         let modified = modified.unwrap();
-        if modified.eq(&source_modified) {
+        if modified.eq(&source_modified) && metadata.len() == size {
             return None;
         }
-
         return create_new_file_and_return_writer(&path, Some(source_modified));
     }
 
@@ -174,11 +173,16 @@ pub fn copy_data(
     total_size_tmp: &Arc<Mutex<usize>>,
     buffer_size: u32,
 ) -> ControlFlow<()> {
-    let dat_red = reader.read_random(*offset, buf).unwrap();
+    let mut local_buf = buf.clone();
+    let dat_red = reader.read_random(*offset, &mut local_buf).unwrap();
     if dat_red == 0 {
         return ControlFlow::Break(());
     }
-    file_writer.write_random(*offset, &*buf).unwrap();
+
+    let binding = local_buf[..dat_red].to_vec();
+    local_buf = binding;
+    
+    file_writer.write_random(*offset, &*local_buf).unwrap();
     total_size_pb.inc(dat_red as u64);
     let mut total_size = total_size_tmp.lock().unwrap();
     *total_size = *total_size + dat_red;

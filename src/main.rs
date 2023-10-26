@@ -79,8 +79,7 @@ fn main() {
                     let mut reader = FileReader::from(file.file_path);
                     let name = reader.name();
                     current_file.set_message(format!("Copying file: {:?}", name));
-                    let file_writer =
-                        create_file_writer(relative_path, name, destination, size, file.modified);
+                    let file_writer = create_file_writer(relative_path, name, destination, file.size, file.modified);
                     if file_writer.is_none() {
                         total_size_pb.inc(reader.size());
                         let mut total_file = total_file.lock().unwrap();
