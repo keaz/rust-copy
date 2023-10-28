@@ -3,7 +3,11 @@ use std::{
     fs::{self, remove_file, File, Metadata, ReadDir},
     ops::ControlFlow,
     path::{Path, PathBuf},
-    sync::{Arc, Mutex},
+    sync::{
+        mpsc::{self, Sender},
+        Arc, Mutex,
+    },
+    thread,
     time::SystemTime,
 };
 
@@ -11,10 +15,13 @@ use console::{style, Emoji};
 use indicatif::{MultiProgress, ProgressBar, ProgressState, ProgressStyle};
 use io::{FileError, FileReader, FileWriter};
 
+use threadpool::ThreadPool;
+
 pub mod cmd;
 pub mod io;
 
 pub static DEFAULT_BUF_SIZE: u32 = 10240;
+pub static DEFAULT_READ_THREAD_COUNT: i8 = 1;
 pub static DEFAULT_THREAD_COUNT: i8 = 3;
 static LOOKING_GLASS: Emoji<'_, '_> = Emoji("🔍  ", "");
 
@@ -30,16 +37,36 @@ pub struct SourceFile {
     pub modified: Option<SystemTime>,
 }
 
-pub fn walk_dir(
+#[derive(Debug)]
+struct Folder {
+    path_buff: PathBuf,
+    sender: Arc<Sender<Folder>>,
+}
+
+fn walk_dir(
     mut entries: fs::ReadDir,
     file_data: Arc<Mutex<Vec<SourceFile>>>,
-    progress_bar: Arc<ProgressBar>,
+    sender: Arc<Sender<Folder>>,
 ) {
     while let Some(Ok(dir_entry)) = entries.next() {
         let path = dir_entry.path();
+        if path.is_dir() {
+            let folder = Folder {
+                path_buff: path,
+                sender: sender.clone(),
+            };
+            let send = sender.send(folder);
+            match send {
+                Ok(_) => {}
+                Err(err) => {
+                    eprintln!("Failed to send folder {:?} :: {:?}", err.0, err.to_string());
+                }
+            }
+            continue;
+        }
 
         if let Some(metadata) = folder_metadata(&path) {
-            extract_detail_and_walk(metadata, path, file_data.clone(), progress_bar.clone());
+            extract_detail_and_walk(metadata, path, file_data.clone());
         }
     }
 }
@@ -58,9 +85,7 @@ fn extract_detail_and_walk(
     metadata: Metadata,
     path: PathBuf,
     file_data: Arc<Mutex<Vec<SourceFile>>>,
-    progress_bar: Arc<ProgressBar>,
 ) {
-    let progress_bar = progress_bar.clone();
     if metadata.is_file() {
         let mut data = (*file_data).lock().unwrap();
         let modified = match metadata.modified() {
@@ -74,23 +99,11 @@ fn extract_detail_and_walk(
         });
         return;
     }
-
-    if metadata.is_dir() {
-        progress_bar.set_message(format!("Looking files in: {:?}", path));
-        match fs::read_dir(&path) {
-            Err(er) => {
-                eprintln!("Error reading directory {:?} error {:?}", path, er);
-            }
-            Ok(entries) => {
-                walk(entries, file_data, progress_bar.clone());
-            }
-        }
-    }
 }
 
-fn walk(entries: ReadDir, file_data: Arc<Mutex<Vec<SourceFile>>>, progress_bar: Arc<ProgressBar>) {
+fn walk(entries: ReadDir, file_data: Arc<Mutex<Vec<SourceFile>>>, sender: Arc<Sender<Folder>>) {
     let file_data = file_data.clone();
-    walk_dir(entries, file_data, progress_bar);
+    walk_dir(entries, file_data, sender);
 }
 
 pub fn get_reative_path(file: &SourceFile, source: &String) -> String {
@@ -181,7 +194,7 @@ pub fn copy_data(
 
     let binding = local_buf[..dat_red].to_vec();
     local_buf = binding;
-    
+
     file_writer.write_random(*offset, &*local_buf).unwrap();
     total_size_pb.inc(dat_red as u64);
     let mut total_size = total_size_tmp.lock().unwrap();
@@ -208,6 +221,7 @@ pub fn read_file_metadata(
     file_data_arch: &Arc<Mutex<Vec<SourceFile>>>,
     progress_bar: &Arc<ProgressBar>,
     spinner_style: ProgressStyle,
+    read_thread: i8,
 ) -> ControlFlow<()> {
     if file_reader.is_folder() {
         println!(
@@ -215,8 +229,11 @@ pub fn read_file_metadata(
             style("[1/2]").bold().dim(),
             LOOKING_GLASS
         );
+        let (sender, receiver) = mpsc::channel();
+        let sender = Arc::new(sender);
+
         let path = PathBuf::from(source);
-        let reads = fs::read_dir(path);
+        let reads = fs::read_dir(path.clone());
         match reads {
             Err(er) => {
                 eprintln!("Error reading folder  path {}", er);
@@ -225,7 +242,31 @@ pub fn read_file_metadata(
             Ok(entries) => {
                 let file_data_arch = Arc::clone(file_data_arch);
                 progress_bar.set_style(spinner_style.clone());
-                walk_dir(entries, file_data_arch, progress_bar.clone());
+                let file_data_arch_cloned = file_data_arch.clone();
+                let sender_handler = thread::spawn(move || {
+                    walk_dir(entries, file_data_arch_cloned, sender.clone());
+                });
+
+                let pool = ThreadPool::new(read_thread as usize);
+
+                for folder in receiver {
+                    let file_data_arch = file_data_arch.clone();
+                    let progress_bar = progress_bar.clone();
+                    pool.execute(move || {
+                        let path = folder.path_buff;
+                        progress_bar.set_message(format!("Looking files in: {:?}", path));
+                        match fs::read_dir(&path) {
+                            Err(er) => {
+                                eprintln!("Error reading directory {:?} error {:?}", path, er);
+                            }
+                            Ok(entries) => {
+                                walk(entries, file_data_arch, folder.sender.clone());
+                            }
+                        }
+                    })
+                }
+
+                sender_handler.join().unwrap();
             }
         }
     } else {
@@ -261,8 +302,8 @@ pub fn create_total_progressbar(
     total_size_pb
 }
 
-#[cfg(target_family = "unix")] 
-pub fn rewrite_destination(source: String,destination: String) -> String {
+#[cfg(target_family = "unix")]
+pub fn rewrite_destination(source: String, destination: String) -> String {
     if source.ends_with("/") {
         return destination;
     }
@@ -271,8 +312,8 @@ pub fn rewrite_destination(source: String,destination: String) -> String {
     return destination + "/" + splits;
 }
 
-#[cfg(target_family = "windows")] 
-pub fn rewrite_destination(source: String,destination: String) -> String {
+#[cfg(target_family = "windows")]
+pub fn rewrite_destination(source: String, destination: String) -> String {
     if source.ends_with("\\") {
         return destination;
     }
