@@ -10,16 +10,14 @@ use console::{style, Emoji};
 use indicatif::{MultiProgress, ProgressBar, ProgressStyle};
 use rfcp::{
     cmd::CmdArgs, copy_data, create_file_writer, create_progress_bars, create_total_progressbar,
-    get_reative_path, io::FileReader, read_file_metadata, SourceFile, rewrite_destination,
+    get_reative_path, io::FileReader, read_file_metadata, rewrite_destination, SourceFile,
 };
 
 static TRUCK: Emoji<'_, '_> = Emoji("🚚  ", "");
 
 fn main() {
     let cmds = CmdArgs::parse_from(env::args_os());
-
     let file_reader = FileReader::new(cmds.source.clone());
-    let size = file_reader.size();
 
     let source_files: Vec<SourceFile> = vec![];
     let file_data_arch = Arc::new(Mutex::new(source_files));
@@ -34,6 +32,7 @@ fn main() {
         &file_data_arch,
         &progress_bar,
         spinner_style,
+        cmds.read_thread,
     ) {
         return;
     }
@@ -56,7 +55,7 @@ fn main() {
     let total_size_pb = Arc::new(total_size_pb);
 
     let buffer_size = cmds.buffer_size;
-    let destination = rewrite_destination(cmds.source.clone(),cmds.destination);
+    let destination = rewrite_destination(cmds.source.clone(), cmds.destination);
     for _ in 0..cmds.threads {
         let destination = destination.clone();
         let file_data_arch = file_data_arch.clone();
@@ -79,7 +78,13 @@ fn main() {
                     let mut reader = FileReader::from(file.file_path);
                     let name = reader.name();
                     current_file.set_message(format!("Copying file: {:?}", name));
-                    let file_writer = create_file_writer(relative_path, name, destination, file.size, file.modified);
+                    let file_writer = create_file_writer(
+                        relative_path,
+                        name,
+                        destination,
+                        file.size,
+                        file.modified,
+                    );
                     if file_writer.is_none() {
                         total_size_pb.inc(reader.size());
                         let mut total_file = total_file.lock().unwrap();

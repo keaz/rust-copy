@@ -33,5 +33,6 @@ rfcp -s=/source/folder/ -d=/destination/folder
 ## Options
 -s : Souce folder
 -d : Destintion folder
--t : Number of threads (default 3)
+-t : Number of threads to use copy files  (default 3)
+-r : Number of threads to use read the filed (default 1) Note: for HDD use the default
 -b : Buffer size (default 10240)
