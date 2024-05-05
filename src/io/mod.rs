@@ -6,7 +6,6 @@ use std::{
 };
 
 use filetime::{set_file_mtime, FileTime};
-use log::warn;
 
 #[derive(Debug)]
 pub enum FileError {
@@ -23,7 +22,7 @@ impl FileReader {
     pub fn new(path: String) -> Self {
         let path_buf = PathBuf::new().join(&path);
         if !path_buf.exists() {
-            warn!("File does not exists {:?}", path);
+            println!("File does not exists {:?}", path);
         }
         let cl = path_buf.clone();
         let file_name = cl.file_name().unwrap().to_str().unwrap();
@@ -35,7 +34,7 @@ impl FileReader {
 
     pub fn from(path_buf: PathBuf) -> Self {
         if !path_buf.exists() {
-            warn!("File does not exists {:?}", path_buf);
+            println!("File does not exists {:?}", path_buf);
         }
         let cl = path_buf.clone();
         let file_name = cl.file_name().unwrap().to_str().unwrap();
@@ -84,11 +83,11 @@ impl FileWriter {
         path: PathBuf,
         source_modified: Option<SystemTime>,
     ) -> Result<Self, FileError> {
-        return Ok(FileWriter {
-            file: file,
+        Ok(FileWriter {
+            file,
             path,
             source_modified,
-        });
+        })
     }
 
     pub fn set_modified(&self) {
@@ -127,7 +126,7 @@ impl FileWriter {
     ///
     pub fn write_random(&mut self, offset: u64, buf: &[u8]) -> Result<(), FileError> {
         self.file.seek(SeekFrom::Start(offset)).unwrap();
-        self.file.write(buf).unwrap();
+        let _x = self.file.write(buf).unwrap();
         Ok(())
     }
 }

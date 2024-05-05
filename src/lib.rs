@@ -75,7 +75,7 @@ pub fn folder_metadata(path: &PathBuf) -> Option<Metadata> {
     match fs::metadata(path) {
         Err(err) => {
             eprintln!("Error reading metadata {:?} error {:?}", path, err);
-            return Option::None;
+            Option::None
         }
         Ok(metadata) => Option::Some(metadata),
     }
@@ -97,7 +97,6 @@ fn extract_detail_and_walk(
             size: metadata.len(),
             modified,
         });
-        return;
     }
 }
 
@@ -106,13 +105,12 @@ fn walk(entries: ReadDir, file_data: Arc<Mutex<Vec<SourceFile>>>, sender: Arc<Se
     walk_dir(entries, file_data, sender);
 }
 
-pub fn get_reative_path(file: &SourceFile, source: &String) -> String {
+pub fn get_reative_path(file: &SourceFile, source: &str) -> String {
     let file_path = file.file_path.clone();
-    let source = PathBuf::from(source.clone());
+    let source = PathBuf::from(source);
     let relative_path = file_path.strip_prefix(source).unwrap();
     let relative_path = format!("{:?}", relative_path);
-    let relative_path = relative_path.replace("\"", "");
-    relative_path
+    relative_path.replace('\"', "")
 }
 
 pub fn create_file_writer(
@@ -161,9 +159,9 @@ fn create_new_file_and_return_writer(
     modified: Option<SystemTime>,
 ) -> Option<FileWriter> {
     let _ = remove_file(path);
-    let file = create_file(&path).unwrap();
+    let file = create_file(path).unwrap();
     let file_writer = FileWriter::new(file, path.clone(), modified).unwrap();
-    return Some(file_writer);
+    Some(file_writer)
 }
 
 fn create_file(path: &Path) -> Result<File, FileError> {
@@ -177,6 +175,7 @@ fn create_file(path: &Path) -> Result<File, FileError> {
     Ok(file)
 }
 
+#[inline(always)]
 pub fn copy_data(
     reader: &mut FileReader,
     offset: &mut u64,
@@ -195,11 +194,11 @@ pub fn copy_data(
     let binding = local_buf[..dat_red].to_vec();
     local_buf = binding;
 
-    file_writer.write_random(*offset, &*local_buf).unwrap();
+    file_writer.write_random(*offset, &local_buf).unwrap();
     total_size_pb.inc(dat_red as u64);
     let mut total_size = total_size_tmp.lock().unwrap();
-    *total_size = *total_size + dat_red;
-    *offset = *offset + buffer_size as u64;
+    *total_size += dat_red;
+    *offset += buffer_size as u64;
     *buf = vec![0; buffer_size as usize];
 
     ControlFlow::Continue(())
@@ -304,12 +303,12 @@ pub fn create_total_progressbar(
 
 #[cfg(target_family = "unix")]
 pub fn rewrite_destination(source: String, destination: String) -> String {
-    if source.ends_with("/") {
+    if source.ends_with('/') {
         return destination;
     }
 
-    let splits = source.split("/").last().unwrap();
-    return destination + "/" + splits;
+    let splits = source.split('/').last().unwrap();
+    destination + "/" + splits
 }
 
 #[cfg(target_family = "windows")]

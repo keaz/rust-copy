@@ -88,7 +88,7 @@ fn main() {
                     if file_writer.is_none() {
                         total_size_pb.inc(reader.size());
                         let mut total_file = total_file.lock().unwrap();
-                        *total_file = *total_file + 1;
+                        *total_file += 1;
                         continue;
                     }
 
@@ -110,7 +110,7 @@ fn main() {
                     }
                     file_writer.set_modified();
                     let mut total_file = total_file.lock().unwrap();
-                    *total_file = *total_file + 1;
+                    *total_file += 1;
                 }
             }
         });
